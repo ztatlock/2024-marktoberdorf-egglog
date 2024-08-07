@@ -85,6 +85,9 @@ class Set:
   def __repr__(self):
     return repr(self.substs)
 
+  def __iter__(self):
+    return iter(self.substs)
+
 
 class TestSubst(unittest.TestCase):
   def test_empty_subst(self):

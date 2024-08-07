@@ -11,7 +11,7 @@ class AtomPat(Pat):
   vres: str
 
   def __str__(self):
-    return f'{self.atom} = {self.vres}'
+    return f'{self.atom} ∈ {self.vres}'
 
   def match(self, subst, res: int):
     return subst.bind(self.vres, res)
@@ -24,7 +24,7 @@ class AppPat(Pat):
 
   def __str__(self):
     args = ' '.join(self.vargs)
-    return f'({self.op} {args}) = {self.vres}'
+    return f'({self.op} {args}) ∈ {self.vres}'
 
   def match(self, subst, args: list[int], res: int):
     assert len(self.vargs) == len(args)
@@ -35,6 +35,15 @@ class AppPat(Pat):
 class Query:
   def __init__(self, pats: list[Pat]):
     self.pats = pats
+
+  def __str__(self):
+    return "\n".join(str(pat) for pat in self.pats)
+
+  def __repr__(self):
+    return repr(self.pats)
+
+  def __iter__(self):
+    return iter(self.pats)
 
 import unittest
 import subst

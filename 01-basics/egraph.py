@@ -24,13 +24,16 @@ class EGraph:
         return self.atom[a]
 
       case expr.App(op, args):
-        if op not in self.ttab:
+        if op not in self.atab:
           self.atab[op] = table.AppTab(self.uf)
         ids = tuple(self.get_expr(arg) for arg in args)
         return self.atab[op].get(ids)
 
       case _:
         raise ValueError(f"invalid expression {e}")
+
+  def get_sexpr(self, se):
+    return self.get_expr(expr.parse(se))
 
   def rebuild(self):
     # clear the dirty flag so we can detect changes
@@ -58,8 +61,8 @@ class EGraph:
         # otherwise check all substitutions for this pattern
         ss = subst.Set()
         id = self.atom[a]
-        for subst in substs:
-          ss.add(pat.match(subst, id))
+        for s in substs:
+          ss.add(pat.match(s, id))
         return ss
 
       case query.AppPat(op, _, _):
@@ -70,9 +73,9 @@ class EGraph:
         # otherwise check all tuples under all substitutions for this pattern
         # database techniques can be EXTREMELY helpful here!
         ss = subst.Set()
-        for subst in substs:
+        for s in substs:
           for ids, id in self.atab[op].tab.items():
-            ss.add(pat.match(subst, ids, id))
+            ss.add(pat.match(s, ids, id))
         return ss
 
   def query(self, q):
@@ -87,3 +90,43 @@ class EGraph:
     # return all substitutions that make all patterns match
     return substs
 
+import unittest
+
+class TestEGraph(unittest.TestCase):
+  def setUp(self):
+    self.eg = EGraph()
+
+  def test_add_atom(self):
+    id = self.eg.get_sexpr('42')
+    self.assertEqual(self.eg.atom[42], id)
+
+  def test_add_app(self):
+    id = self.eg.get_sexpr('(+ 1 2)')
+    self.assertTrue(id in self.eg.atab['+'].tab.values())
+
+  def test_rebuild(self):
+    self.eg.get_sexpr('(+ 1 2)')
+    self.eg.uf.union(self.eg.atom[1], self.eg.atom[2])
+    self.eg.rebuild()
+    self.assertEqual(self.eg.uf.find(self.eg.atom[1]), self.eg.uf.find(self.eg.atom[2]))
+
+  def test_query_atom(self):
+    self.eg.get_sexpr('42')
+    q = query.Query([query.AtomPat(42, 'x')])
+    substs = self.eg.query(q)
+    expected_subst = subst.Subst({'x': self.eg.atom[42]})
+    self.assertIn(expected_subst, substs.substs)
+
+  def test_query_app(self):
+    self.eg.get_sexpr('(+ 1 2)')
+    q = query.Query([query.AppPat('+', ['x', 'y'], 'z')])
+    substs = self.eg.query(q)
+    expected_subst = subst.Subst({
+      'x': self.eg.atom[1],
+      'y': self.eg.atom[2],
+      'z': self.eg.atab['+'].get((self.eg.atom[1], self.eg.atom[2]))
+    })
+    self.assertIn(expected_subst, substs.substs)
+
+if __name__ == '__main__':
+  unittest.main()
