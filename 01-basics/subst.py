@@ -94,42 +94,42 @@ class TestSubst(unittest.TestCase):
     subst = Subst({})
     self.assertEqual(subst.subst, {})
     self.assertTrue(isinstance(subst, Subst))
-    self.assertEqual(str(subst), '{}')
-    self.assertEqual(repr(subst), '{}')
+    self.assertEqual(str(subst), "{}")
+    self.assertEqual(repr(subst), "{}")
 
   def test_bind_new_var(self):
     subst = Subst({})
-    new_subst = subst.bind('x', 1)
-    self.assertEqual(new_subst.subst, {'x': 1})
+    new_subst = subst.bind("x", 1)
+    self.assertEqual(new_subst.subst, {"x": 1})
     self.assertTrue(isinstance(new_subst, Subst))
     self.assertNotEqual(subst, new_subst)
 
   def test_bind_existing_var_same_value(self):
-    subst = Subst({'x': 1})
-    new_subst = subst.bind('x', 1)
-    self.assertEqual(new_subst.subst, {'x': 1})
+    subst = Subst({"x": 1})
+    new_subst = subst.bind("x", 1)
+    self.assertEqual(new_subst.subst, {"x": 1})
     self.assertTrue(isinstance(new_subst, Subst))
     self.assertEqual(subst, new_subst)
 
   def test_bind_existing_var_different_value(self):
-    subst = Subst({'x': 1})
-    new_subst = subst.bind('x', 2)
+    subst = Subst({"x": 1})
+    new_subst = subst.bind("x", 2)
     self.assertEqual(new_subst, _bogus)
     self.assertFalse(isinstance(new_subst, Subst))
 
   def test_bogus_subst(self):
-    self.assertEqual(str(_bogus), 'bogus')
-    self.assertEqual(repr(_bogus), 'bogus')
+    self.assertEqual(str(_bogus), "bogus")
+    self.assertEqual(repr(_bogus), "bogus")
     self.assertFalse(isinstance(_bogus, Subst))
 
   def test_bogus_bind(self):
-    new_bogus = _bogus.bind('x', 1)
+    new_bogus = _bogus.bind("x", 1)
     self.assertEqual(new_bogus, _bogus)
     self.assertFalse(isinstance(new_bogus, Subst))
 
   def test_hashable_subst(self):
-    subst1 = Subst({'x': 1})
-    subst2 = Subst({'x': 1})
+    subst1 = Subst({"x": 1})
+    subst2 = Subst({"x": 1})
     self.assertEqual(hash(subst1), hash(subst2))
     self.assertEqual(subst1, subst2)
 
@@ -142,7 +142,7 @@ class TestSubst(unittest.TestCase):
 class TestSet(unittest.TestCase):
   def test_add_valid_subst(self):
     ss = Set()
-    subst = Subst({'x': 1})
+    subst = Subst({"x": 1})
     ss.add(subst)
     self.assertEqual(len(ss.substs), 1)
     self.assertIn(subst, ss.substs)
@@ -155,19 +155,19 @@ class TestSet(unittest.TestCase):
 
   def test_add_duplicate_subst(self):
     ss = Set()
-    subst1 = Subst({'x': 1})
-    subst2 = Subst({'x': 1})
+    subst1 = Subst({"x": 1})
+    subst2 = Subst({"x": 1})
     ss.add(subst1)
     ss.add(subst2)
     self.assertEqual(len(ss.substs), 1)
 
   def test_add_multiple_subst(self):
     ss = Set()
-    subst1 = Subst({'x': 1})
-    subst2 = Subst({'y': 2})
+    subst1 = Subst({"x": 1})
+    subst2 = Subst({"y": 2})
     ss.add(subst1)
     ss.add(subst2)
     self.assertEqual(len(ss.substs), 2)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
   unittest.main()

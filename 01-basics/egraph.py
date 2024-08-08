@@ -1,8 +1,11 @@
 import uf
 import expr
-import table
-import query
 import subst
+import pattern
+import query
+import action
+import rule
+import table
 
 class EGraph:
   def __init__(self):
@@ -16,6 +19,21 @@ class EGraph:
     # rebuilding though! Otherwise ematching will not work correctly.
     self.atom = {}
 
+  def __str__(self):
+    res = "Atoms:\n"
+    for a, id in sorted(self.atom.items()):
+      res += f"{a}\t->\t{id}\n"
+    res += "\n\n"
+    res += "App Tables:\n"
+    for op, tab in self.atab.items():
+      res += f"{op}:\n{tab}"
+    return res
+
+  def get_enode(self, op, ids):
+    if op not in self.atab:
+      self.atab[op] = table.AppTab(self.uf)
+    return self.atab[op].get(ids)
+
   def get_expr(self, e):
     match e:
       case expr.Atom(a):
@@ -24,10 +42,8 @@ class EGraph:
         return self.atom[a]
 
       case expr.App(op, args):
-        if op not in self.atab:
-          self.atab[op] = table.AppTab(self.uf)
         ids = tuple(self.get_expr(arg) for arg in args)
-        return self.atab[op].get(ids)
+        return self.get_enode(op, ids)
 
       case _:
         raise ValueError(f"invalid expression {e}")
@@ -53,7 +69,7 @@ class EGraph:
 
   def matches(self, substs, pat):
     match pat:
-      case query.AtomPat(a, _):
+      case pattern.AtomPat(a, _):
         # no matches if we do not have this literal
         if a not in self.atom:
           return subst.Set()
@@ -65,7 +81,7 @@ class EGraph:
           ss.add(pat.match(s, id))
         return ss
 
-      case query.AppPat(op, _, _):
+      case pattern.AppPat(op, _, _):
         # no matches if we do not have this operator
         if op not in self.atab:
           return subst.Set()
@@ -78,7 +94,7 @@ class EGraph:
             ss.add(pat.match(s, ids, id))
         return ss
 
-  def query(self, q):
+  def query(self, q: query.Query) -> subst.Set:
     # initially, we only have the empty substitution
     substs = subst.Set()
     substs.add(subst.Subst({}))
@@ -90,6 +106,56 @@ class EGraph:
     # return all substitutions that make all patterns match
     return substs
 
+  def squery(self, s: str) -> subst.Set:
+    return self.query(query.parse(s))
+
+  def do_action(self, a: action.Action, s: subst.Subst):
+    match a:
+      case action.Nop():
+        pass
+
+      case action.Seq(a1, a2):
+        self.do_action(a1, s)
+        self.do_action(a2, s)
+
+      case action.Merge(l, r):
+        lid = self.get_aexpr(l, s)
+        rid = self.get_aexpr(r, s)
+        self.uf.union(lid, rid)
+
+      case _:
+        raise ValueError(f"invalid action {a}")
+
+  def get_aexpr(self, ae: action.ActionExpr, s: subst.Subst) -> int:
+    match ae:
+      case action.Atom(a):
+        return self.get_expr(expr.Atom(a))
+
+      case action.PatVar(v):
+        # raise KeyError if not found
+        return s.subst[v]
+
+      case action.App(op, args):
+        ids = tuple(self.get_aexpr(arg, s) for arg in args)
+        return self.get_enode(op, ids)
+
+      case _:
+        raise ValueError(f"invalid action expression {ae}")
+
+  def run_rule(self, r: rule.Rule):
+    substs = self.query(r.query)
+    for s in substs:
+      self.do_action(r.action, s)
+
+  def run_srule(self, sq: str, sa: str):
+    r = rule.parse(sq, sa)
+    self.run_rule(r)
+
+
+#
+# TESTS
+#
+
 import unittest
 
 class TestEGraph(unittest.TestCase):
@@ -97,36 +163,58 @@ class TestEGraph(unittest.TestCase):
     self.eg = EGraph()
 
   def test_add_atom(self):
-    id = self.eg.get_sexpr('42')
+    id = self.eg.get_sexpr("42")
     self.assertEqual(self.eg.atom[42], id)
 
   def test_add_app(self):
-    id = self.eg.get_sexpr('(+ 1 2)')
-    self.assertTrue(id in self.eg.atab['+'].tab.values())
+    id = self.eg.get_sexpr("(+ 1 2)")
+    self.assertTrue(id in self.eg.atab["+"].tab.values())
 
   def test_rebuild(self):
-    self.eg.get_sexpr('(+ 1 2)')
+    self.eg.get_sexpr("(+ 1 2)")
     self.eg.uf.union(self.eg.atom[1], self.eg.atom[2])
     self.eg.rebuild()
     self.assertEqual(self.eg.uf.find(self.eg.atom[1]), self.eg.uf.find(self.eg.atom[2]))
 
   def test_query_atom(self):
-    self.eg.get_sexpr('42')
-    q = query.Query([query.AtomPat(42, 'x')])
+    self.eg.get_sexpr("42")
+    q = query.parse("42 = ?x")
     substs = self.eg.query(q)
-    expected_subst = subst.Subst({'x': self.eg.atom[42]})
+    expected_subst = subst.Subst({"?x": self.eg.atom[42]})
     self.assertIn(expected_subst, substs.substs)
 
   def test_query_app(self):
-    self.eg.get_sexpr('(+ 1 2)')
-    q = query.Query([query.AppPat('+', ['x', 'y'], 'z')])
+    self.eg.get_sexpr("(+ 1 2)")
+    q = query.parse("(+ ?x ?y) = ?z")
     substs = self.eg.query(q)
     expected_subst = subst.Subst({
-      'x': self.eg.atom[1],
-      'y': self.eg.atom[2],
-      'z': self.eg.atab['+'].get((self.eg.atom[1], self.eg.atom[2]))
+      "?x": self.eg.atom[1],
+      "?y": self.eg.atom[2],
+      "?z": self.eg.atab["+"].get((self.eg.atom[1], self.eg.atom[2]))
     })
     self.assertIn(expected_subst, substs.substs)
 
-if __name__ == '__main__':
+  def test_query_assoc(self):
+    self.eg.get_sexpr("(+ 1 (+ 2 3))")
+    q = query.parse("""
+      (+ ?a ?r) = ?root
+      (+ ?b ?c) = ?r
+    """)
+    substs = self.eg.query(q)
+    expected_subst = subst.Subst({
+      "?a": self.eg.atom[1],
+      "?b": self.eg.atom[2],
+      "?c": self.eg.atom[3],
+      "?r": self.eg.atab["+"].get((
+              self.eg.atom[2],
+              self.eg.atom[3])),
+      "?root": self.eg.atab["+"].get((
+                self.eg.atom[1],
+                self.eg.atab["+"].get((
+                  self.eg.atom[2],
+                  self.eg.atom[3]))))
+    })
+    self.assertIn(expected_subst, substs.substs)
+
+if __name__ == "__main__":
   unittest.main()

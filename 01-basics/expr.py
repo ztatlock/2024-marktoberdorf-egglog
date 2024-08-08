@@ -6,7 +6,7 @@ import unittest
 
 @dataclass(frozen=True)
 class Expr:
-  '''Base class for expressions.'''
+  """Base class for expressions."""
   pass
 
 @dataclass(frozen=True)
@@ -22,10 +22,10 @@ class App(Expr):
   args: list[Expr]
 
   def __str__(self) -> str:
-    args = ' '.join(map(str, self.args))
-    return f'({self.op} {args})'
+    args = " ".join(map(str, self.args))
+    return f"({self.op} {args})"
 
-grammar = '''
+grammar = """
   ?start : expr
 
   ?expr : app
@@ -33,20 +33,19 @@ grammar = '''
 
   app : "(" op expr* ")"
 
-  op : /[a-zA-Z_\\+\\*\\/\\-][a-zA-Z0-9_\\+\\*\\/\\-]*/
+  op : /[a-zA-Z_+*\\/-][a-zA-Z0-9_+*\\/-]*/
 
-  atom : SIGNED_INT               -> int_lit
-       | SIGNED_FLOAT             -> float_lit
+  atom : SIGNED_INT                -> int_lit
+       | SIGNED_FLOAT              -> float_lit
        | /[a-zA-Z_][a-zA-Z0-9_-]*/ -> variable
 
   %import common.SIGNED_INT
   %import common.SIGNED_FLOAT
-  %import common.ESCAPED_STRING
   %import common.WS
   %ignore WS
-'''
+"""
 
-_parser = lark.Lark(grammar, start='start', parser='lalr')
+_parser = lark.Lark(grammar, start="start", parser="lalr")
 
 class ExprTransformer(lark.Transformer):
   def int_lit(self, items):
@@ -79,44 +78,44 @@ def parse(s):
 
 class TestExprParser(unittest.TestCase):
   def test_int_lit(self):
-    expr = parse('42')
-    self.assertEqual(str(expr), '42')
+    expr = parse("42")
+    self.assertEqual(str(expr), "42")
     self.assertIsInstance(expr, Atom)
     self.assertEqual(expr.atom, 42)
 
   def test_float_lit(self):
-    expr = parse('3.14')
-    self.assertEqual(str(expr), '3.14')
+    expr = parse("3.14")
+    self.assertEqual(str(expr), "3.14")
     self.assertIsInstance(expr, Atom)
     self.assertEqual(expr.atom, 3.14)
 
   def test_variable(self):
-    expr = parse('x')
-    self.assertEqual(str(expr), 'x')
+    expr = parse("x")
+    self.assertEqual(str(expr), "x")
     self.assertIsInstance(expr, Atom)
-    self.assertEqual(expr.atom, 'x')
+    self.assertEqual(expr.atom, "x")
 
   def test_simple_app(self):
-    expr = parse('(+ x 0)')
-    self.assertEqual(str(expr), '(+ x 0)')
+    expr = parse("(+ x 0)")
+    self.assertEqual(str(expr), "(+ x 0)")
     self.assertIsInstance(expr, App)
-    self.assertEqual(expr.op, '+')
+    self.assertEqual(expr.op, "+")
     self.assertEqual(len(expr.args), 2)
-    self.assertEqual(str(expr.args[0]), 'x')
-    self.assertEqual(str(expr.args[1]), '0')
+    self.assertEqual(str(expr.args[0]), "x")
+    self.assertEqual(str(expr.args[1]), "0")
 
   def test_nested_app(self):
-    expr = parse('(- (+ x y) x)')
-    self.assertEqual(str(expr), '(- (+ x y) x)')
+    expr = parse("(- (+ x y) x)")
+    self.assertEqual(str(expr), "(- (+ x y) x)")
     self.assertIsInstance(expr, App)
-    self.assertEqual(expr.op, '-')
+    self.assertEqual(expr.op, "-")
     self.assertEqual(len(expr.args), 2)
     self.assertIsInstance(expr.args[0], App)
-    self.assertEqual(expr.args[0].op, '+')
+    self.assertEqual(expr.args[0].op, "+")
     self.assertEqual(len(expr.args[0].args), 2)
-    self.assertEqual(str(expr.args[0].args[0]), 'x')
-    self.assertEqual(str(expr.args[0].args[1]), 'y')
-    self.assertEqual(str(expr.args[1]), 'x')
+    self.assertEqual(str(expr.args[0].args[0]), "x")
+    self.assertEqual(str(expr.args[0].args[1]), "y")
+    self.assertEqual(str(expr.args[1]), "x")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
   unittest.main()
