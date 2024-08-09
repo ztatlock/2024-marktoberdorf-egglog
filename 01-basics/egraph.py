@@ -16,18 +16,25 @@ class EGraph:
     # children). Since they do not have arguments, atoms can never violate
     # functional dependency. Instead we'll use a single dictionary to store all
     # atoms. We will still need to make sure to canonicalize their ids during
-    # rebuilding though! Otherwise ematching will not work correctly.
+    # rebuilding though! Otherwise ematching may not work correctly.
     self.atom = {}
 
   def __str__(self):
-    res = "Atoms:\n"
+    atoms = ""
     for a, id in sorted(self.atom.items()):
-      res += f"{a}\t->\t{id}\n"
-    res += "\n\n"
-    res += "App Tables:\n"
+      atoms += f"{a}\t->\t{id}\n"
+
+    tables = ""
     for op, tab in self.atab.items():
-      res += f"{op}:\n{tab}"
-    return res
+      tables += f"\n{op}\n{tab}"
+
+    return f"""
+===== ATOMS ======
+{atoms}
+
+===== TABLES =====
+{tables}
+"""
 
   def get_enode(self, op, ids):
     if op not in self.atab:
