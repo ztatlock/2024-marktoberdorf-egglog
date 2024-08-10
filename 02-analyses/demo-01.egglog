@@ -1,0 +1,74 @@
+(datatype Math
+  (Num Rational)
+  (Var String)
+  (Add Math Math)
+  (Div Math Math))
+
+(let zero (Num (rational 0 1)))
+(let one (Num (rational 1 1)))
+(let two (Num (rational 2 1)))
+
+(Add one two)
+
+(rewrite (Add ?a ?b) (Add ?b ?a))
+
+(run 1)
+
+(rewrite
+  (Add (Num ?r1) (Num ?r2))
+  (Num [+ ?r1 ?r2]))
+
+(check (= (Add two one)
+          (Add one two)))
+
+(rewrite (Add ?a zero) ?a)
+
+(rule (
+  (Add ?a zero)
+)(
+  (union (Add ?a zero) ?a)
+))
+
+(push)
+
+;; BAD!
+(rule (
+  (Num ?r)
+)(
+  (union one (Div (Num ?r) (Num ?r)))
+))
+
+(run 1)
+
+(check (Div zero zero))
+
+(pop)
+
+(function lo (Math) Rational :merge (max old new))
+(function hi (Math) Rational :merge (min old new))
+
+(rule (
+  (Num ?r)
+)(
+  (set (lo (Num ?r)) ?r)
+  (set (hi (Num ?r)) ?r)
+))
+
+(rule (
+  (Add ?a ?b)
+)(
+  (set (lo (Add ?a ?b)) (+ (lo ?a) (lo ?b)))
+  (set (hi (Add ?a ?b)) (+ (hi ?a) (hi ?b)))
+))
+
+(let x (Var "x"))
+(set (lo x) zero)
+(set (hi x) one)
+
+(let x1 (Add x one))
+
+(run 2)
+
+(extract (lo x1))
+(extract (hi x1))
+

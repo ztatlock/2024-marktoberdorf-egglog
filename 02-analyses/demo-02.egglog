@@ -1,0 +1,244 @@
+(datatype Math
+  (Num Rational)
+  (Var String)
+  (Add Math Math)
+  (Div Math Math)
+  (Mul Math Math))
+
+(Num (rational 0 1))
+
+(let zero (Num (rational 0 1)))
+
+(let one  (Num (rational 1 1)))
+
+(let two  (Num (rational 2 1)))
+
+(let one-two (Add one two))
+
+;; a + b -> b + a
+(rewrite
+  (Add a b)
+  (Add b a))
+
+(run 1)
+
+;; a + 0 -> a
+(rewrite
+  (Add a zero)
+  a)
+
+;; rule is like rewrite, but more general
+(rule (
+  (Add ?a zero)
+)(
+  (union (Add ?a zero) ?a)
+))
+
+;; r1 + r1 -> [[r1 + r2]]
+(rewrite
+  (Add (Num r1) (Num r2))
+  (Num [+ r1 r2])) ; primitive plus!
+
+
+;; checkpoint
+(push)
+
+;; run all rules once
+(run 1)
+
+;; constant folding
+(check (=
+  one-two
+  (Num (rational 3 1))))
+
+;; commutativity
+(check (=
+  one-two
+  (Add two one)))
+
+;; jump back to previous checkpoint
+(pop)
+
+(push)
+;; actions don't have to union LHS w/ RHS!
+(rule (
+  (Num r)
+)(
+  (union
+    one
+    (Div (Num r) (Num r)))
+))
+
+;; uh oh...
+(run 1)
+
+(pop)
+
+;; we need to detect when things are non-zero
+;; add interval analysis!
+
+(function lo (Math) Rational
+  :merge (max old new))
+
+(function hi (Math) Rational
+  :merge (min old new))
+
+;; r \in [r, r]
+(rule (
+  (Num r)
+)(
+  (set (lo (Num r)) r)
+  (set (hi (Num r)) r))
+)
+
+;; lo(a + b) = lo(a) + lo(b)
+(rule (
+  (= e (Add a b))
+  (= x (lo a))
+  (= y (lo b))
+)(
+  (set (lo e) (+ x y)))
+)
+
+;; hi(a + b) = hi(a) + hi(b)
+(rule (
+  (= e (Add a b))
+  (= x (hi a))
+  (= y (hi b))
+)(
+  (set (hi e) (+ x y))
+))
+
+;; assuming
+;;   M = {lo(a), hi(a)}
+;;   N = {lo(b), hi(b)}
+;;   X = {m * n | m \in M, n \in N}
+;; then
+;;  a * b \in [min(X), max(X)]
+(rule (
+  (= e (Mul a b))
+)(
+  (set (lo e)
+    (min (* (lo a) (lo b))
+    (min (* (lo a) (hi b))
+    (min (* (hi a) (lo b))
+         (* (hi a) (hi b))))))
+  (set (hi e)
+    (max (* (lo a) (lo b))
+    (max (* (lo a) (hi b))
+    (max (* (hi a) (lo b))
+         (* (hi a) (hi b))))))
+))
+
+;; a sound version of the div rule
+(rule (
+  (= e (Add a b))
+  [> (lo e) (rational 0 1)]
+)(
+  (union one (Div e e))
+))
+
+(let x (Var "x"))
+(let x_plus_1 (Add x one))
+
+;; running analyses
+(push)
+(set (lo x) (rational 0 1))
+(set (hi x) (rational 1 1))
+(run 3)
+
+(query-extract (lo x_plus_1))
+(query-extract (hi x_plus_1))
+
+(check (= one (Div x_plus_1 x_plus_1)))
+
+(fail (check (Div ?x zero)))
+
+(pop)
+
+;; set x to 200/201
+(set (lo x) (rational 200 201))
+(set (hi x) (rational 200 201))
+
+(run 3)
+
+(query-extract (lo x_plus_1))
+(query-extract (hi x_plus_1))
+
+(function fp-value (Math) f64)
+
+;; if e's interval has only one value
+;; then we can also set e equal to it
+(rule (
+  (= (to-f64 (lo e))
+     (to-f64 (hi e)))
+)(
+  (set (fp-value e)
+       (to-f64 (lo e)))
+))
+
+(run 1)
+(query-extract (fp-value x_plus_1))
+
+(function best-error (Math) f64
+  :merge new
+  :default (to-f64 (rational 10000 1)))
+
+(rule (
+  (Num n)
+)(
+  (set
+    (best-error (Num n))
+    (to-f64 n))
+))
+
+(rule (
+  (Add a b)
+)(
+  (best-error (Add a b))
+))
+
+;; finding more accurate programs
+(rule (
+  (= e (Add a b))
+  (= (best-error a) va)
+  (= (best-error b) vb)
+  (= fpv (fp-value e))
+  (= computed (+ va vb))
+  (< (abs (- computed fpv))
+     (best-error e))
+)(
+  (set
+    (best-error e)
+    computed)
+))
+
+(push)
+
+(let target
+  (Add
+    (Add (Num (rational 1 100))
+         (Num (rational 1 100)))
+    (Num (rational -2 100))))
+
+(run 1)
+
+;; set a default
+(best-error target)
+
+;; bad error, not enough constant folding
+(query-extract (best-error target))
+
+(run 1)
+
+;; better!
+(query-extract (best-error target))
+
+(pop)
+
+
+;; (let target
+;;   (Add
+;;     (Add (Num (rational 10000000 1))
+;;          (Num (rational 1 10000000)))
+;;     (Num (rational -10000000 1))))
